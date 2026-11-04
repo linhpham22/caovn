@@ -2,25 +2,17 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8">
+<meta name="color-scheme" content="light">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Thực Đơn Cao Lớn</title>
 <meta name="description" content="Thực đơn 30 ngày tháng 11/2026 tăng chiều cao + sổ tay theo dõi thói quen và chiều cao">
 <style>
 :root{
-  --bg:#f7f5f0;--surface:#ffffff;--surface2:#f1eee6;--text:#1f2420;--muted:#6b706a;--line:#e4e0d6;
-  --accent:#2f7d5b;--accent-soft:#e3f1ea;--warn:#b5651d;--warn-soft:#fbeedf;--danger:#b23a3a;
-  --m0:#e9a23b;--m1:#7bb661;--m2:#3c8dbc;--m3:#9b6bc2;--m4:#4a5a8a;
-  --shadow:0 1px 2px rgba(0,0,0,.05),0 2px 8px rgba(0,0,0,.04);
-}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#151816;--surface:#1e2220;--surface2:#262b28;--text:#e8ebe7;--muted:#9aa19b;--line:#323834;
-  --accent:#5cc492;--accent-soft:#1f3a2d;--warn:#e9a15c;--warn-soft:#3a2c1d;--danger:#e57373;
-  --shadow:none;
-}}
-:root[data-theme="dark"]{
-  --bg:#151816;--surface:#1e2220;--surface2:#262b28;--text:#e8ebe7;--muted:#9aa19b;--line:#323834;
-  --accent:#5cc492;--accent-soft:#1f3a2d;--warn:#e9a15c;--warn-soft:#3a2c1d;--danger:#e57373;
-  --shadow:none;
+  --bg:#ffffff;--surface:#ffffff;--surface2:#fdf1f2;--text:#2a1416;--muted:#7a5a5d;--line:#f1d5d8;
+  --accent:#d0182c;--accent-ink:#ffffff;--accent-soft:#fde8ea;--warn:#b4232f;--warn-soft:#fff0e6;--danger:#b4232f;
+  --hdr:#d0182c;--hdr-ink:#ffffff;
+  --m0:#e8384f;--m1:#f0645a;--m2:#c4162a;--m3:#e0587a;--m4:#8e1023;
+  --shadow:0 1px 2px rgba(160,20,40,.06),0 2px 10px rgba(160,20,40,.06);
 }
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -28,18 +20,27 @@ body{background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-syste
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
 .wrap{max-width:760px;margin:0 auto;padding:0 16px}
-header.top{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+header.top .kidbar{display:flex;gap:6px;overflow-x:auto;padding-top:0;padding-bottom:10px;scrollbar-width:none}
+header.top .kidbar::-webkit-scrollbar{display:none}
+.kid{flex:none;border:1px solid rgba(255,255,255,.55);background:transparent;color:#fff;border-radius:999px;padding:5px 12px;font-size:13px;white-space:nowrap}
+.kid.on{background:#fff;color:var(--accent);border-color:#fff;font-weight:700}
+.kid.add{border-style:dashed;opacity:.9}
+header.top{position:sticky;top:0;z-index:5;background:var(--hdr);color:var(--hdr-ink);box-shadow:0 2px 8px rgba(120,0,20,.18)}
+.top .brand small{color:rgba(255,255,255,.85)!important}
+.top .chip{background:#fff;color:var(--accent);border-color:#fff;font-weight:600}
 .top .wrap{display:flex;align-items:center;gap:10px;padding-top:10px;padding-bottom:10px}
 .brand{flex:1;min-width:0}
 .brand b{display:block;font-size:16px}
 .brand small{color:var(--muted);font-size:12px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;white-space:nowrap}
-.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 nav.tabs{position:fixed;bottom:0;left:0;right:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
 nav.tabs .wrap{display:flex;padding:0}
 nav.tabs button{flex:1;border:0;background:none;padding:8px 2px 10px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
 nav.tabs button span{font-size:20px;line-height:1}
-nav.tabs button.on{color:var(--accent);font-weight:600}
+nav.tabs button.on{color:var(--accent);font-weight:700}
+nav.tabs button.on span{transform:scale(1.1)}
+nav.tabs{border-top:2px solid var(--accent)!important}
 h2{font-size:20px;margin:18px 0 8px}
 h3{font-size:16px;margin:0}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0;box-shadow:var(--shadow)}
@@ -47,13 +48,13 @@ h3{font-size:16px;margin:0}
 .row{display:flex;align-items:center;gap:8px}
 .grow{flex:1;min-width:0}
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 12px}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .icon-btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;width:40px;height:40px;display:grid;place-items:center;font-size:18px;flex:none}
 .daynav{display:flex;align-items:center;gap:10px;margin-top:14px}
 .daynav .t{flex:1;text-align:center}
 .daynav .t b{display:block;font-size:17px}
 .daynav .t small{color:var(--muted)}
-.banner{background:var(--accent-soft);border-radius:12px;padding:10px 12px;font-size:14px;margin-top:12px}
+.banner{background:var(--accent-soft);border-left:4px solid var(--accent);border-radius:12px;padding:10px 12px;font-size:14px;margin-top:12px}
 .banner b{color:var(--accent)}
 .meal{border-left:4px solid var(--c);padding:12px 14px}
 .meal-h{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
@@ -73,7 +74,7 @@ h3{font-size:16px;margin:0}
 .tag-opt{font-size:11px;background:var(--warn-soft);color:var(--warn);border-radius:6px;padding:1px 6px;margin-left:6px;font-weight:600}
 .habits{display:grid;grid-template-columns:1fr;gap:8px}
 .habit{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);text-align:left;width:100%}
-.habit .box{width:26px;height:26px;border-radius:8px;border:2px solid var(--line);display:grid;place-items:center;flex:none;font-weight:700;color:#fff}
+.habit .box{width:26px;height:26px;border-radius:8px;border:2px solid var(--line);display:grid;place-items:center;flex:none;font-weight:700;color:var(--accent-ink)}
 .habit.on{border-color:var(--accent);background:var(--accent-soft)}
 .habit.on .box{background:var(--accent);border-color:var(--accent)}
 .progress{height:8px;background:var(--surface2);border-radius:99px;overflow:hidden}
@@ -126,9 +127,9 @@ table.t td input{width:100%;min-width:0;border:1px solid var(--line);background:
 </head>
 <body>
 <header class="top"><div class="wrap">
-  <div class="brand"><b>🌱 Thực Đơn Cao Lớn</b><small id="hdrSub">Tháng 11/2026 · DS Vũ Đức Thắng</small></div>
+  <div class="brand"><b>🍎 Thực Đơn Cao Lớn</b><small id="hdrSub">Tháng 11/2026 · DS Vũ Đức Thắng</small></div>
   <button class="chip" id="ageChip" title="Đổi nhóm tuổi"></button>
-</div></header>
+</div><div class="wrap kidbar" id="kidbar"></div></header>
 
 <main class="wrap">
   <section id="v-today"></section>
@@ -163,9 +164,22 @@ const WEEK_RANGES = [[1,7],[8,14],[15,21],[22,28],[29,30]];
 
 // ---------- storage ----------
 const KEY='thucdon-t11-2026';
-let S = {age:null, habits:{}, profile:{}, log:{}};
-try{ const raw=localStorage.getItem(KEY); if(raw) S=Object.assign(S, JSON.parse(raw)); }catch(e){}
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+const newKid = (name) => ({id:'k'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), age:null, habits:{}, profile:name?{name}:{}, log:{}});
+function normalize(o){
+  // migrate old single-child format {age,habits,profile,log,shop}
+  if(o && !Array.isArray(o.kids)){ const k=newKid(); ['age','habits','profile','log'].forEach(f=>{ if(o[f]!=null) k[f]=o[f]; }); o={kids:[k], active:k.id, shop:o.shop||{}}; }
+  o=o||{}; if(!Array.isArray(o.kids)||!o.kids.length) o.kids=[newKid()];
+  o.kids.forEach(k=>{k.habits=k.habits||{};k.profile=k.profile||{};k.log=k.log||{};if(k.age===undefined)k.age=null;});
+  if(!o.kids.some(k=>k.id===o.active)) o.active=o.kids[0].id; o.shop=o.shop||{};
+  return o;
+}
+let R = null;
+try{ const raw=localStorage.getItem(KEY); if(raw) R=JSON.parse(raw); }catch(e){}
+R = normalize(R);
+let S = R.kids.find(k=>k.id===R.active);
+function setActive(id){ R.active=id; S=R.kids.find(k=>k.id===id); save(); }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(R)); }catch(e){} }
+const kidName = (k,i) => k.profile.name || ('Bé '+(i+1));
 
 const esc = s => String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const $ = s => document.querySelector(s);
@@ -192,7 +206,7 @@ let cur = todayDay();
 let view='today';
 let dayMode='menu'; // menu | shop
 
-function renderAgeChip(){ $('#ageChip').textContent='👦 '+AGES[ageIdx()]; }
+function renderAgeChip(){ $('#ageChip').textContent=(S.profile.sex==='Nữ'?'👧 ':'👦 ')+AGES[ageIdx()]; }
 $('#ageChip').onclick=()=>{ S.age=(ageIdx()+1)%3; save(); renderAgeChip(); render(); toast('Định lượng: '+AGES[S.age]); };
 
 function splitNote(n){ const i=n.indexOf(':'); return (i>0&&i<70)?[n.slice(0,i),n.slice(i+1).trim()]:['',n]; }
@@ -240,7 +254,7 @@ function renderToday(){
   } else if(dayMode==='shop'){
     html+=`<div class="card"><h3>🛒 Nguyên liệu ngày ${d}/11</h3><p class="muted" style="margin:4px 0 8px;font-size:13px">Định lượng cho ${AGES[ai]} · bấm để gạch khi đã mua</p>
       ${groups.map((g,gi)=>`<div style="margin-top:10px"><b style="color:${MEALS[gi].c}">${MEALS[gi].icon} ${MEALS[gi].name}</b>
-      <ul class="clean shop" style="list-style:none;padding:0">${g.map((x,i)=>{const k=d+'-'+gi+'-'+i; const on=(S.shop||{})[k];
+      <ul class="clean shop" style="list-style:none;padding:0">${g.map((x,i)=>{const k=d+'-'+gi+'-'+i; const on=R.shop[k];
         return `<li><label style="display:flex;gap:8px;cursor:pointer;${on?'text-decoration:line-through;opacity:.5':''}"><input type="checkbox" data-shop="${k}" ${on?'checked':''}><span><b>${esc(x[1].replace(' (nhóm ≥10 tuổi)',''))}</b> — ${esc(x[2])} <span class="muted">(${esc(x[3+ai])})</span></span></label></li>`}).join('')}</ul></div>`).join('')}
     </div>`;
   } else {
@@ -257,7 +271,7 @@ function renderToday(){
     const arr=S.habits[d]||[false,false,false,false,false,false]; arr[+b.dataset.h]=!arr[+b.dataset.h]; S.habits[d]=arr; save(); render();
     if(habitCount(d)===6) toast('🎉 Tuyệt vời! Đủ 6/6 thói quen hôm nay');
   });
-  document.querySelectorAll('[data-shop]').forEach(c=>c.onchange=()=>{S.shop=S.shop||{}; S.shop[c.dataset.shop]=c.checked; save(); render();});
+  document.querySelectorAll('[data-shop]').forEach(c=>c.onchange=()=>{R.shop[c.dataset.shop]=c.checked; save(); render();});
 }
 
 function renderCal(){
@@ -294,7 +308,13 @@ function heightCalc(){
 }
 function renderTrack(){
   const P=S.profile, L=S.log, tt=totalTicks(), hc=heightCalc(), wm=waterMl(parseFloat(P.kg));
-  let html=`<h2>Theo dõi</h2>
+  const fam = R.kids.length>1 ? `<div class="card"><h3>👨‍👩‍👧‍👦 Cả nhà</h3>
+    <table class="t" style="margin-top:6px"><thead><tr><th>Bé</th><th>Hôm nay</th><th>Tháng</th><th>Tăng cao</th></tr></thead><tbody>
+    ${R.kids.map((k,i)=>{ const t=Object.values(k.habits).reduce((a,h)=>a+h.filter(Boolean).length,0); const td=(k.habits[todayDay()]||[]).filter(Boolean).length;
+      const g=(!isNaN(parseFloat(k.log.h0))&&!isNaN(parseFloat(k.log.h2)))?(+(parseFloat(k.log.h2)-parseFloat(k.log.h0)).toFixed(2))+' cm':'--';
+      return `<tr style="cursor:pointer;${k.id===R.active?'background:var(--accent-soft)':''}" data-pick="${k.id}"><td><b>${esc(kidName(k,i))}</b>${k.profile.age?`<br><small class="muted">${esc(k.profile.age)} tuổi</small>`:''}</td><td>${td}/6</td><td>${Math.round(t/180*100)}%</td><td>${g}</td></tr>`}).join('')}
+    </tbody></table><p class="muted" style="font-size:12px;margin:6px 0 0">Bấm vào một bé để xem chi tiết.</p></div>` : '';
+  let html=`<h2>Theo dõi · ${esc(kidName(S,R.kids.indexOf(S)))}</h2>${fam}
   <div class="card"><h3>👤 Hồ sơ của bé</h3>
     <div class="grid2">
       <div><label class="f">Họ tên bé</label><input class="in" data-p="name" value="${esc(P.name)}" placeholder="VD: Minh An"></div>
@@ -345,17 +365,20 @@ function renderTrack(){
       <button class="btn primary" id="exp">⬇️ Tải sao lưu</button>
       <label class="btn" style="display:inline-block">⬆️ Khôi phục<input type="file" accept=".json,application/json" id="imp" hidden></label>
       <button class="btn" id="prt">🖨️ In</button>
-      <button class="btn" id="rst" style="color:var(--danger)">Xoá dữ liệu</button>
+      ${R.kids.length>1?'<button class="btn" id="delKid" style="color:var(--danger)">Xoá bé này</button>':''}
+      <button class="btn" id="rst" style="color:var(--danger)">Xoá tất cả</button>
     </div>
   </div>`;
   $('#v-track').innerHTML=html;
-  document.querySelectorAll('[data-p]').forEach(el=>el.onchange=()=>{S.profile[el.dataset.p]=el.value; if(el.dataset.p==='age') S.age=null; save(); renderAgeChip(); renderHdr(); renderTrack();});
+  document.querySelectorAll('[data-p]').forEach(el=>el.onchange=()=>{S.profile[el.dataset.p]=el.value; if(el.dataset.p==='age') S.age=null; save(); renderAgeChip(); renderHdr(); renderKids(); renderTrack();});
   document.querySelectorAll('[data-l]').forEach(el=>el.onchange=()=>{S.log[el.dataset.l]=el.value; save(); renderTrack();});
   $('#toTick').onclick=()=>{cur=todayDay();dayMode='tick';go('today')};
-  $('#exp').onclick=()=>{const b=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='thuc-don-t11-2026-saoluu.json';a.click();};
-  $('#imp').onchange=e=>{const f=e.target.files[0]; if(!f) return; f.text().then(t=>{try{const o=JSON.parse(t); S=Object.assign({age:null,habits:{},profile:{},log:{}},o); save(); render(); renderAgeChip(); renderHdr(); toast('Đã khôi phục dữ liệu');}catch(err){toast('File không hợp lệ')}})};
+  $('#exp').onclick=()=>{const b=new Blob([JSON.stringify(R,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='thuc-don-t11-2026-saoluu.json';a.click();};
+  $('#imp').onchange=e=>{const f=e.target.files[0]; if(!f) return; f.text().then(t=>{try{R=normalize(JSON.parse(t)); S=R.kids.find(k=>k.id===R.active); save(); render(); renderAgeChip(); renderHdr(); renderKids(); toast('Đã khôi phục dữ liệu');}catch(err){toast('File không hợp lệ')}})};
   $('#prt').onclick=()=>print();
-  $('#rst').onclick=()=>{ if(confirm('Xoá toàn bộ tick, hồ sơ và số đo trên máy này?')){ S={age:null,habits:{},profile:{},log:{}}; save(); render(); renderAgeChip(); renderHdr(); toast('Đã xoá'); } };
+  document.querySelectorAll('[data-pick]').forEach(r=>r.onclick=()=>{ setActive(r.dataset.pick); renderAgeChip(); renderHdr(); renderKids(); renderTrack(); });
+  const dk=$('#delKid'); if(dk) dk.onclick=()=>{ const i=R.kids.indexOf(S); if(!confirm('Xoá toàn bộ dữ liệu của '+kidName(S,i)+'?')) return; R.kids.splice(i,1); setActive(R.kids[0].id); renderAgeChip(); renderHdr(); renderKids(); renderTrack(); toast('Đã xoá'); };
+  $('#rst').onclick=()=>{ if(confirm('Xoá toàn bộ dữ liệu của TẤT CẢ các con trên máy này?')){ R=normalize(null); S=R.kids[0]; save(); render(); renderAgeChip(); renderHdr(); renderKids(); toast('Đã xoá'); } };
 }
 
 function renderGuide(){
@@ -373,11 +396,18 @@ function renderGuide(){
   $('#wkg').oninput=upd; upd();
 }
 
-function renderHdr(){ $('#hdrSub').textContent = S.profile.name ? ('Tháng 11/2026 · Sổ tay của '+S.profile.name) : 'Tháng 11/2026 · DS Vũ Đức Thắng'; }
+function renderHdr(){ $('#hdrSub').textContent = R.kids.length>1 ? ('Tháng 11/2026 · Gia đình '+R.kids.length+' bé') : (S.profile.name ? ('Tháng 11/2026 · Sổ tay của '+S.profile.name) : 'Tháng 11/2026 · DS Vũ Đức Thắng'); }
+function renderKids(){
+  const el=$('#kidbar');
+  el.innerHTML = R.kids.map((k,i)=>`<button class="kid ${k.id===R.active?'on':''}" data-kid="${k.id}">${k.profile.sex==='Nữ'?'👧':'👦'} ${esc(kidName(k,i))}</button>`).join('')
+    + `<button class="kid add" id="addKid">＋ Thêm con</button>`;
+  el.querySelectorAll('[data-kid]').forEach(b=>b.onclick=()=>{ if(b.dataset.kid===R.active) return; setActive(b.dataset.kid); renderAgeChip(); renderHdr(); renderKids(); render(); toast('Đang xem: '+kidName(S,R.kids.indexOf(S))); });
+  $('#addKid').onclick=()=>{ const n=prompt('Tên bé:', 'Bé '+(R.kids.length+1)); if(n===null) return; const k=newKid(n.trim()||('Bé '+(R.kids.length+1))); R.kids.push(k); setActive(k.id); renderAgeChip(); renderHdr(); renderKids(); go('track'); toast('Đã thêm '+kidName(k,R.kids.length-1)+' — điền tuổi, cân nặng nhé'); };
+}
 function render(){ ({today:renderToday,cal:renderCal,track:renderTrack,guide:renderGuide})[view](); }
 function go(v){ view=v; document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden', s.id!=='v-'+v)); document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.v===v)); render(); scrollTo(0,0); }
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>go(b.dataset.v));
-renderAgeChip(); renderHdr(); render();
+renderAgeChip(); renderHdr(); renderKids(); render();
 </script>
 </body>
 </html>
