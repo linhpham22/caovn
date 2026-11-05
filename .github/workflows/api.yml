@@ -1,4 +1,5 @@
 name: Deploy API (Cloudflare)
+# Deploys api/ to Cloudflare (Worker caovn-api + D1 caovn)
 on:
   push:
     branches: [main]
