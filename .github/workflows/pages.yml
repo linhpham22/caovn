@@ -2,6 +2,7 @@ name: Deploy Pages
 on:
   push:
     branches: [main]
+    paths-ignore: ['api/**', '.github/workflows/api.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,8 +22,10 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true
+      - name: Collect site files
+        run: mkdir _site && cp index.html CNAME _site/
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: .
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4

@@ -118,6 +118,7 @@ table.t td input{width:100%;min-width:0;border:1px solid var(--line);background:
 .shop li{display:flex;gap:8px;align-items:flex-start}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:8px 14px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
 .toast.show{opacity:1}
+.code{font:600 20px/1.3 ui-monospace,Menlo,Consolas,monospace;letter-spacing:1px;text-align:center;background:var(--surface2);border:1px dashed var(--accent);border-radius:12px;padding:10px;color:var(--accent)}
 .hidden{display:none!important}
 .seg{display:flex;background:var(--surface2);border-radius:10px;padding:3px;gap:3px}
 .seg button{flex:1;border:0;background:none;border-radius:8px;padding:7px 4px;font-size:13px}
@@ -162,24 +163,154 @@ const WD = ['CN','T2','T3','T4','T5','T6','T7'];
 const WD_FULL = ['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'];
 const WEEK_RANGES = [[1,7],[8,14],[15,21],[22,28],[29,30]];
 
-// ---------- storage ----------
-const KEY='thucdon-t11-2026';
-const newKid = (name) => ({id:'k'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), age:null, habits:{}, profile:name?{name}:{}, log:{}});
-function normalize(o){
-  // migrate old single-child format {age,habits,profile,log,shop}
-  if(o && !Array.isArray(o.kids)){ const k=newKid(); ['age','habits','profile','log'].forEach(f=>{ if(o[f]!=null) k[f]=o[f]; }); o={kids:[k], active:k.id, shop:o.shop||{}}; }
-  o=o||{}; if(!Array.isArray(o.kids)||!o.kids.length) o.kids=[newKid()];
-  o.kids.forEach(k=>{k.habits=k.habits||{};k.profile=k.profile||{};k.log=k.log||{};if(k.age===undefined)k.age=null;});
-  if(!o.kids.some(k=>k.id===o.active)) o.active=o.kids[0].id; o.shop=o.shop||{};
-  return o;
+// ---------- storage: flat key/value map F (synced per family) -> derived view R ----------
+// Keys: k/<id>/c (created) · k/<id>/x (deleted) · k/<id>/a (age group override) · k/<id>/p/<f> profile
+//       k/<id>/h/<day>/<i> habit tick · k/<id>/l/<f> height log · s/<key> shopping list
+const KEY='thucdon-t11-2026', FKEY='thucdon-t11-2026-v2', MKEY='thucdon-sync';
+const API='https://caovn-api.linhizi.com';
+const lsGet = k => { try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } };
+const lsSet = (k,v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
+const newId = () => 'k'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+let F = lsGet(FKEY) || {};            // key -> value
+let M = Object.assign({fam:null, since:0, queue:[], active:null}, lsGet(MKEY)||{});
+function persist(){ lsSet(FKEY,F); lsSet(MKEY,M); }
+
+// flatten old-format state {kids:[...],shop} or {age,habits,profile,log} into ops
+function flattenOld(o){
+  const ops=[]; if(!o) return ops;
+  if(!Array.isArray(o.kids)) o={kids:[{id:newId(),age:o.age,habits:o.habits,profile:o.profile,log:o.log}],shop:o.shop};
+  o.kids.forEach((k,i)=>{ const id=k.id||newId(); ops.push([`k/${id}/c`, Date.now()+i]);
+    if(k.age!=null) ops.push([`k/${id}/a`, k.age]);
+    Object.entries(k.profile||{}).forEach(([f,v])=>{ if(v!=='' && v!=null) ops.push([`k/${id}/p/${f}`, String(v)]); });
+    Object.entries(k.log||{}).forEach(([f,v])=>{ if(v!=='' && v!=null) ops.push([`k/${id}/l/${f}`, String(v)]); });
+    Object.entries(k.habits||{}).forEach(([d,arr])=>(arr||[]).forEach((v,j)=>{ if(v) ops.push([`k/${id}/h/${d}/${j}`,1]); }));
+  });
+  Object.entries(o.shop||{}).forEach(([k,v])=>{ if(v) ops.push(['s/'+k,1]); });
+  return ops;
 }
-let R = null;
-try{ const raw=localStorage.getItem(KEY); if(raw) R=JSON.parse(raw); }catch(e){}
-R = normalize(R);
-let S = R.kids.find(k=>k.id===R.active);
-function setActive(id){ R.active=id; S=R.kids.find(k=>k.id===id); save(); }
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(R)); }catch(e){} }
+function setK(k,v,quiet){ F[k]=v; M.queue.push(k); persist(); if(!quiet){ build(); scheduleSync(800); } }
+function setMany(ops){ ops.forEach(([k,v])=>{ F[k]=v; M.queue.push(k); }); persist(); build(); scheduleSync(300); }
+
+let R={kids:[],shop:{}}, S=null;
+function build(){
+  const kids={};
+  for(const [k,v] of Object.entries(F)){
+    if(k.startsWith('s/')){ continue; }
+    const m=k.match(/^k\/([^/]+)\/(.*)$/); if(!m) continue;
+    const kid = kids[m[1]] || (kids[m[1]]={id:m[1],c:0,x:0,age:null,profile:{},log:{},habits:{}});
+    const r=m[2];
+    if(r==='c') kid.c=v; else if(r==='x') kid.x=v; else if(r==='a') kid.age=(v===null||v===undefined)?null:+v;
+    else if(r.startsWith('p/')) kid.profile[r.slice(2)]=v??'';
+    else if(r.startsWith('l/')) kid.log[r.slice(2)]=v??'';
+    else if(r.startsWith('h/')){ const [d,i]=r.slice(2).split('/'); (kid.habits[d]||(kid.habits[d]=[false,false,false,false,false,false]))[+i]=!!v; }
+  }
+  R.kids=Object.values(kids).filter(k=>!k.x && k.c).sort((a,b)=>a.c-b.c);
+  R.shop={}; for(const [k,v] of Object.entries(F)) if(k.startsWith('s/')&&v) R.shop[k.slice(2)]=true;
+  S = R.kids.find(k=>k.id===M.active) || R.kids[0] || null;
+  R.active = S && S.id;
+}
+function ensureKid(){ build(); if(!R.kids.length){ const id=newId(); setK(`k/${id}/c`, Date.now(), true); M.active=id; build(); } }
+function setActive(id){ M.active=id; persist(); build(); }
 const kidName = (k,i) => k.profile.name || ('Bé '+(i+1));
+
+// one-time migration from v1 local storage
+if(!lsGet(FKEY)){ const old=lsGet(KEY); if(old){ flattenOld(old).forEach(([k,v])=>{F[k]=v;}); if(old.active) M.active=null; persist(); } }
+ensureKid();
+
+// ---------- family sync ----------
+const CODE_ABC='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function newCode(){ const b=new Uint8Array(16); crypto.getRandomValues(b); return Array.from(b,x=>CODE_ABC[x%32]).join(''); }
+const fmtCode = c => c.replace(/(.{4})(?=.)/g,'$1-');
+const famLink = c => location.origin+location.pathname+'#gd='+c;
+let syncState='off', syncTimer=null, syncing=false, pendingRender=false;
+function scheduleSync(ms){ if(!M.fam) return; clearTimeout(syncTimer); syncTimer=setTimeout(sync, ms); }
+async function sync(){
+  if(!M.fam || syncing) return; syncing=true; setSync('busy');
+  try{
+    if(M.queue.length){
+      const n=M.queue.length, keys=[...new Set(M.queue)];
+      for(let i=0;i<keys.length;i+=400){
+        const ops=keys.slice(i,i+400).map(k=>[k, F[k]===undefined?null:F[k]]);
+        const r=await fetch(API+'/f/'+M.fam,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ops})});
+        if(!r.ok) throw new Error('push '+r.status);
+      }
+      M.queue=M.queue.slice(n); persist();
+    }
+    const r=await fetch(API+'/f/'+M.fam+'?since='+Math.max(0,M.since-3000));
+    if(!r.ok) throw new Error('pull '+r.status);
+    const j=await r.json(); let changed=false; const pend=new Set(M.queue);
+    for(const [k,v,t] of j.rows){ if(t>M.since) M.since=t; if(pend.has(k)) continue;
+      if(JSON.stringify(F[k])!==JSON.stringify(v)){ if(v===null) delete F[k]; else F[k]=v; changed=true; } }
+    persist(); setSync('ok');
+    if(changed){ ensureKid(); refreshAll(true); }
+  }catch(e){ setSync(navigator.onLine===false?'offline':'err'); }
+  finally{ syncing=false; if(M.queue.length) scheduleSync(4000); }
+}
+function setSync(st){ syncState=st; const el=$('#syncDot'); if(!el) return;
+  const map={off:['',''],busy:['⏳','Đang đồng bộ…'],ok:['☁️','Đã đồng bộ với cả nhà'],offline:['📴','Mất mạng — sẽ tự đồng bộ lại'],err:['⚠️','Chưa đồng bộ được — sẽ thử lại']};
+  el.textContent=map[st][0]; el.title=map[st][1]; const t=$('#syncText'); if(t) t.textContent=map[st][1]; }
+function refreshAll(remote){
+  if(!S) return;
+  const ae=document.activeElement;
+  if(remote && ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName) && ae.closest('main')){ pendingRender=true; return; }
+  renderAgeChip(); renderHdr(); renderKids(); render();
+}
+document.addEventListener('focusout',()=>setTimeout(()=>{ if(pendingRender){ pendingRender=false; refreshAll(true); } },50));
+setInterval(()=>{ if(M.fam && document.visibilityState==='visible') sync(); }, 15000);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') sync(); });
+window.addEventListener('online',()=>sync());
+const hasData = () => Object.keys(F).some(k=>!/\/c$/.test(k));
+function createFamily(){
+  M.fam=newCode(); M.since=0; M.queue=Object.keys(F); persist(); sync(); refreshAll();
+  toast('Đã tạo nhóm gia đình — gửi link cho cả nhà nhé');
+}
+async function joinFamily(code){
+  code=(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(!/^[A-Z2-9]{16}$/.test(code)){ toast('Mã gia đình không đúng'); return false; }
+  if(M.fam===code) return true;
+  let keep=false;
+  if(hasData()) keep=confirm('Trên máy này đã có dữ liệu của bé.\n\nOK = GỘP dữ liệu này vào sổ tay gia đình\nHủy = Bỏ dữ liệu trên máy này, chỉ dùng dữ liệu của gia đình');
+  if(!keep) F={};
+  M.fam=code; M.since=0; M.queue=keep?Object.keys(F):[]; M.active=null; persist();
+  build(); await sync(); ensureKid(); refreshAll();
+  toast('Đã vào sổ tay gia đình ✓'); return true;
+}
+function leaveFamily(){
+  if(!confirm('Ngừng đồng bộ trên máy này? Dữ liệu hiện có vẫn giữ lại trên máy, nhưng sẽ không cập nhật với cả nhà nữa.')) return;
+  M.fam=null; M.since=0; M.queue=[]; persist(); setSync('off'); refreshAll(); toast('Đã rời nhóm trên máy này');
+}
+async function shareLink(){
+  const url=famLink(M.fam), text='Sổ tay Thực Đơn Cao Lớn của nhà mình — mở link để cùng theo dõi các con:';
+  if(navigator.share){ try{ await navigator.share({title:'Thực Đơn Cao Lớn',text,url}); return; }catch(e){ if(e&&e.name==='AbortError') return; } }
+  try{ await navigator.clipboard.writeText(url); toast('Đã sao chép link — dán vào Zalo nhé'); }
+  catch(e){ prompt('Sao chép link này gửi cho cả nhà:', url); }
+}
+function familyCard(){
+  if(!M.fam) return `<div class="card fam"><h3>👨‍👩‍👧‍👦 Cả nhà cùng theo dõi</h3>
+    <p class="muted" style="font-size:14px;margin:6px 0 10px">Tạo sổ tay gia đình để bố mẹ, ông bà… mở cùng một link là thấy và cập nhật thông tin các con, tự đồng bộ giữa các máy.</p>
+    <button class="btn primary" id="famCreate" style="width:100%">Tạo sổ tay gia đình</button>
+    <details class="acc" style="margin:10px 0 0;box-shadow:none"><summary>Đã có mã gia đình?</summary><div class="body">
+      <div class="row"><input class="in grow" id="famCode" placeholder="VD: K7Q2-M9XP-4TRA-8BCD" autocapitalize="characters"><button class="btn primary" id="famJoin">Vào</button></div>
+    </div></details></div>`;
+  return `<div class="card fam"><h3>👨‍👩‍👧‍👦 Sổ tay gia đình <span id="syncDot" style="font-size:15px"></span></h3>
+    <p class="muted" style="font-size:13px;margin:4px 0 8px"><span id="syncText"></span></p>
+    <div class="code">${fmtCode(M.fam)}</div>
+    <p class="muted" style="font-size:13px;margin:8px 0 10px">Gửi link cho người trong nhà. Ai có link đều xem và sửa được — chỉ gửi cho người thân.</p>
+    <div class="row" style="flex-wrap:wrap">
+      <button class="btn primary" id="famShare">📤 Gửi link cho cả nhà</button>
+      <button class="btn" id="famSync">🔄 Đồng bộ</button>
+      <button class="btn" id="famLeave" style="color:var(--danger)">Rời nhóm</button>
+    </div></div>`;
+}
+function bindFamily(){
+  const c=$('#famCreate'); if(c) c.onclick=createFamily;
+  const j=$('#famJoin'); if(j) j.onclick=()=>joinFamily($('#famCode').value);
+  const sh=$('#famShare'); if(sh) sh.onclick=shareLink;
+  const sy=$('#famSync'); if(sy) sy.onclick=()=>sync();
+  const lv=$('#famLeave'); if(lv) lv.onclick=leaveFamily;
+  setSync(M.fam?syncState==='off'?'busy':syncState:'off');
+}
 
 const esc = s => String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const $ = s => document.querySelector(s);
@@ -207,7 +338,7 @@ let view='today';
 let dayMode='menu'; // menu | shop
 
 function renderAgeChip(){ $('#ageChip').textContent=(S.profile.sex==='Nữ'?'👧 ':'👦 ')+AGES[ageIdx()]; }
-$('#ageChip').onclick=()=>{ S.age=(ageIdx()+1)%3; save(); renderAgeChip(); render(); toast('Định lượng: '+AGES[S.age]); };
+$('#ageChip').onclick=()=>{ const n=(ageIdx()+1)%3; setK(`k/${S.id}/a`, n); renderAgeChip(); render(); toast('Định lượng: '+AGES[n]); };
 
 function splitNote(n){ const i=n.indexOf(':'); return (i>0&&i<70)?[n.slice(0,i),n.slice(i+1).trim()]:['',n]; }
 
@@ -268,10 +399,10 @@ function renderToday(){
   document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{dayMode=b.dataset.mode;render()});
   document.querySelectorAll('.dish').forEach(el=>el.onclick=()=>el.classList.toggle('open'));
   document.querySelectorAll('[data-h]').forEach(b=>b.onclick=()=>{
-    const arr=S.habits[d]||[false,false,false,false,false,false]; arr[+b.dataset.h]=!arr[+b.dataset.h]; S.habits[d]=arr; save(); render();
+    const i=+b.dataset.h, on=!(S.habits[d]||[])[i]; setK(`k/${S.id}/h/${d}/${i}`, on?1:0); render();
     if(habitCount(d)===6) toast('🎉 Tuyệt vời! Đủ 6/6 thói quen hôm nay');
   });
-  document.querySelectorAll('[data-shop]').forEach(c=>c.onchange=()=>{R.shop[c.dataset.shop]=c.checked; save(); render();});
+  document.querySelectorAll('[data-shop]').forEach(c=>c.onchange=()=>{setK('s/'+c.dataset.shop, c.checked?1:0); render();});
 }
 
 function renderCal(){
@@ -314,7 +445,7 @@ function renderTrack(){
       const g=(!isNaN(parseFloat(k.log.h0))&&!isNaN(parseFloat(k.log.h2)))?(+(parseFloat(k.log.h2)-parseFloat(k.log.h0)).toFixed(2))+' cm':'--';
       return `<tr style="cursor:pointer;${k.id===R.active?'background:var(--accent-soft)':''}" data-pick="${k.id}"><td><b>${esc(kidName(k,i))}</b>${k.profile.age?`<br><small class="muted">${esc(k.profile.age)} tuổi</small>`:''}</td><td>${td}/6</td><td>${Math.round(t/180*100)}%</td><td>${g}</td></tr>`}).join('')}
     </tbody></table><p class="muted" style="font-size:12px;margin:6px 0 0">Bấm vào một bé để xem chi tiết.</p></div>` : '';
-  let html=`<h2>Theo dõi · ${esc(kidName(S,R.kids.indexOf(S)))}</h2>${fam}
+  let html=`<h2>Theo dõi · ${esc(kidName(S,R.kids.indexOf(S)))}</h2>${familyCard()}${fam}
   <div class="card"><h3>👤 Hồ sơ của bé</h3>
     <div class="grid2">
       <div><label class="f">Họ tên bé</label><input class="in" data-p="name" value="${esc(P.name)}" placeholder="VD: Minh An"></div>
@@ -360,7 +491,7 @@ function renderTrack(){
   </div>
 
   <div class="card noprint"><h3>💾 Sao lưu dữ liệu</h3>
-    <p class="muted" style="font-size:13px;margin:6px 0 10px">Dữ liệu lưu trên trình duyệt của máy này. Tải file sao lưu để chuyển sang máy khác hoặc phòng khi xoá lịch sử.</p>
+    <p class="muted" style="font-size:13px;margin:6px 0 10px">${M.fam?'Dữ liệu đã đồng bộ lên sổ tay gia đình. Vẫn có thể tải file sao lưu để giữ riêng.':'Dữ liệu đang lưu trên trình duyệt của máy này. Tạo sổ tay gia đình ở trên để đồng bộ, hoặc tải file sao lưu.'}</p>
     <div class="row" style="flex-wrap:wrap">
       <button class="btn primary" id="exp">⬇️ Tải sao lưu</button>
       <label class="btn" style="display:inline-block">⬆️ Khôi phục<input type="file" accept=".json,application/json" id="imp" hidden></label>
@@ -370,15 +501,16 @@ function renderTrack(){
     </div>
   </div>`;
   $('#v-track').innerHTML=html;
-  document.querySelectorAll('[data-p]').forEach(el=>el.onchange=()=>{S.profile[el.dataset.p]=el.value; if(el.dataset.p==='age') S.age=null; save(); renderAgeChip(); renderHdr(); renderKids(); renderTrack();});
-  document.querySelectorAll('[data-l]').forEach(el=>el.onchange=()=>{S.log[el.dataset.l]=el.value; save(); renderTrack();});
+  document.querySelectorAll('[data-p]').forEach(el=>el.onchange=()=>{const ops=[[`k/${S.id}/p/${el.dataset.p}`, el.value]]; if(el.dataset.p==='age') ops.push([`k/${S.id}/a`, null]); setMany(ops); renderAgeChip(); renderHdr(); renderKids(); renderTrack();});
+  document.querySelectorAll('[data-l]').forEach(el=>el.onchange=()=>{setK(`k/${S.id}/l/${el.dataset.l}`, el.value); renderTrack();});
   $('#toTick').onclick=()=>{cur=todayDay();dayMode='tick';go('today')};
-  $('#exp').onclick=()=>{const b=new Blob([JSON.stringify(R,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='thuc-don-t11-2026-saoluu.json';a.click();};
-  $('#imp').onchange=e=>{const f=e.target.files[0]; if(!f) return; f.text().then(t=>{try{R=normalize(JSON.parse(t)); S=R.kids.find(k=>k.id===R.active); save(); render(); renderAgeChip(); renderHdr(); renderKids(); toast('Đã khôi phục dữ liệu');}catch(err){toast('File không hợp lệ')}})};
+  $('#exp').onclick=()=>{const b=new Blob([JSON.stringify({v:2,F},null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='thuc-don-t11-2026-saoluu.json';a.click();};
+  $('#imp').onchange=e=>{const f=e.target.files[0]; if(!f) return; f.text().then(t=>{try{const o=JSON.parse(t); const ops=(o&&o.v===2&&o.F)?Object.entries(o.F):flattenOld(o); if(!ops.length) throw 0; setMany(ops); refreshAll(); toast('Đã khôi phục dữ liệu');}catch(err){toast('File không hợp lệ')}})};
   $('#prt').onclick=()=>print();
   document.querySelectorAll('[data-pick]').forEach(r=>r.onclick=()=>{ setActive(r.dataset.pick); renderAgeChip(); renderHdr(); renderKids(); renderTrack(); });
-  const dk=$('#delKid'); if(dk) dk.onclick=()=>{ const i=R.kids.indexOf(S); if(!confirm('Xoá toàn bộ dữ liệu của '+kidName(S,i)+'?')) return; R.kids.splice(i,1); setActive(R.kids[0].id); renderAgeChip(); renderHdr(); renderKids(); renderTrack(); toast('Đã xoá'); };
-  $('#rst').onclick=()=>{ if(confirm('Xoá toàn bộ dữ liệu của TẤT CẢ các con trên máy này?')){ R=normalize(null); S=R.kids[0]; save(); render(); renderAgeChip(); renderHdr(); renderKids(); toast('Đã xoá'); } };
+  bindFamily();
+  const dk=$('#delKid'); if(dk) dk.onclick=()=>{ const i=R.kids.indexOf(S); if(!confirm('Xoá toàn bộ dữ liệu của '+kidName(S,i)+'?'+(M.fam?' (xoá cho cả nhà)':''))) return; setK(`k/${S.id}/x`,1); setActive(R.kids[0].id); renderAgeChip(); renderHdr(); renderKids(); renderTrack(); toast('Đã xoá'); };
+  $('#rst').onclick=()=>{ if(confirm(M.fam?'Xoá dữ liệu của TẤT CẢ các con cho CẢ NHÀ (mọi máy trong nhóm)?':'Xoá toàn bộ dữ liệu của TẤT CẢ các con trên máy này?')){ setMany([...R.kids.map(k=>[`k/${k.id}/x`,1]), ...Object.keys(R.shop).map(k=>['s/'+k,0])]); ensureKid(); render(); renderAgeChip(); renderHdr(); renderKids(); toast('Đã xoá'); } };
 }
 
 function renderGuide(){
@@ -400,14 +532,21 @@ function renderHdr(){ $('#hdrSub').textContent = R.kids.length>1 ? ('Tháng 11/2
 function renderKids(){
   const el=$('#kidbar');
   el.innerHTML = R.kids.map((k,i)=>`<button class="kid ${k.id===R.active?'on':''}" data-kid="${k.id}">${k.profile.sex==='Nữ'?'👧':'👦'} ${esc(kidName(k,i))}</button>`).join('')
-    + `<button class="kid add" id="addKid">＋ Thêm con</button>`;
+    + `<button class="kid add" id="addKid">＋ Thêm con</button>` + (M.fam?`<button class="kid add" id="famBtn" title="Sổ tay gia đình">👨‍👩‍👧 Cả nhà</button>`:`<button class="kid add" id="famBtn">🔗 Chia sẻ cả nhà</button>`);
   el.querySelectorAll('[data-kid]').forEach(b=>b.onclick=()=>{ if(b.dataset.kid===R.active) return; setActive(b.dataset.kid); renderAgeChip(); renderHdr(); renderKids(); render(); toast('Đang xem: '+kidName(S,R.kids.indexOf(S))); });
-  $('#addKid').onclick=()=>{ const n=prompt('Tên bé:', 'Bé '+(R.kids.length+1)); if(n===null) return; const k=newKid(n.trim()||('Bé '+(R.kids.length+1))); R.kids.push(k); setActive(k.id); renderAgeChip(); renderHdr(); renderKids(); go('track'); toast('Đã thêm '+kidName(k,R.kids.length-1)+' — điền tuổi, cân nặng nhé'); };
+  $('#famBtn').onclick=()=>go('track');
+  $('#addKid').onclick=()=>{ const n=prompt('Tên bé:', 'Bé '+(R.kids.length+1)); if(n===null) return; const id=newId(), nm=n.trim()||('Bé '+(R.kids.length+1)); setMany([[`k/${id}/c`,Date.now()],[`k/${id}/p/name`,nm]]); setActive(id); const k=S; renderAgeChip(); renderHdr(); renderKids(); go('track'); toast('Đã thêm '+kidName(k,R.kids.length-1)+' — điền tuổi, cân nặng nhé'); };
 }
 function render(){ ({today:renderToday,cal:renderCal,track:renderTrack,guide:renderGuide})[view](); }
 function go(v){ view=v; document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden', s.id!=='v-'+v)); document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.v===v)); render(); scrollTo(0,0); }
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>go(b.dataset.v));
-renderAgeChip(); renderHdr(); renderKids(); render();
+async function checkHash(){
+  const m=location.hash.match(/gd=([A-Za-z0-9-]+)/); if(!m) return;
+  const code=m[1].toUpperCase().replace(/[^A-Z0-9]/g,''); history.replaceState(null,'',location.pathname+location.search);
+  if(code!==M.fam && confirm('Mở sổ tay gia đình được chia sẻ cho bạn?\n\nMã: '+fmtCode(code))) await joinFamily(code);
+}
+window.addEventListener('hashchange', checkHash);
+(async()=>{ refreshAll(); await checkHash(); refreshAll(); if(M.fam) sync(); })();
 </script>
 </body>
 </html>
