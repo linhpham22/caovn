@@ -282,11 +282,38 @@ function leaveFamily(){
   if(!confirm('Ngừng đồng bộ trên máy này? Dữ liệu hiện có vẫn giữ lại trên máy, nhưng sẽ không cập nhật với cả nhà nữa.')) return;
   M.fam=null; M.since=0; M.queue=[]; persist(); keepHash(); setSync('off'); refreshAll(); toast('Đã rời nhóm trên máy này');
 }
+function copyText(t){
+  // works on http:// and in in-app browsers (Zalo/Facebook) where navigator.clipboard is unavailable
+  const ta=document.createElement('textarea'); ta.value=t; ta.setAttribute('readonly','');
+  ta.style.cssText='position:fixed;top:0;left:0;opacity:0;font-size:16px';
+  document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0,t.length);
+  let ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+  ta.remove(); return ok;
+}
+async function copyLink(){
+  const url=famLink(M.fam);
+  let ok=false;
+  if(navigator.clipboard && window.isSecureContext){ try{ await navigator.clipboard.writeText(url); ok=true; }catch(e){} }
+  if(!ok) ok=copyText(url);
+  const box=$('#famLinkBox');
+  if(ok) toast('✓ Đã sao chép link — mở Zalo và dán vào tin nhắn');
+  else if(box){ box.focus(); box.select(); toast('Giữ ngón tay lên link để Sao chép'); }
+}
 async function shareLink(){
-  const url=famLink(M.fam), text='Sổ tay Thực Đơn Cao Lớn của nhà mình — mở link để cùng theo dõi các con:';
-  if(navigator.share){ try{ await navigator.share({title:'Thực Đơn Cao Lớn',text,url}); return; }catch(e){ if(e&&e.name==='AbortError') return; } }
-  try{ await navigator.clipboard.writeText(url); toast('Đã sao chép link — dán vào Zalo nhé'); }
-  catch(e){ prompt('Sao chép link này gửi cho cả nhà:', url); }
+  const url=famLink(M.fam);
+  try{ await navigator.share({title:'Thực Đơn Cao Lớn', text:'Sổ tay Thực Đơn Cao Lớn của nhà mình — mở link để cùng theo dõi các con:', url}); }
+  catch(e){ if(!(e&&e.name==='AbortError')) copyLink(); }
+}
+let qrLib=null;
+async function showQR(){
+  const el=$('#famQR'); if(!el) return;
+  if(!el.classList.contains('hidden')){ el.classList.add('hidden'); return; }
+  el.classList.remove('hidden'); el.innerHTML='<p class="muted" style="text-align:center">Đang tạo mã QR…</p>';
+  try{
+    if(!qrLib) qrLib=await new Promise((res,rej)=>{ const sc=document.createElement('script'); sc.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js'; sc.onload=()=>res(window.qrcode); sc.onerror=rej; document.head.appendChild(sc); });
+    const q=qrLib(0,'M'); q.addData(famLink(M.fam)); q.make();
+    el.innerHTML='<div style="background:#fff;padding:10px;border-radius:12px;width:max-content;margin:0 auto">'+q.createSvgTag({cellSize:5,margin:2})+'</div><p class="muted" style="text-align:center;font-size:13px;margin:6px 0 0">Người nhà mở Camera điện thoại quét mã này</p>';
+  }catch(e){ el.innerHTML='<p class="muted" style="text-align:center">Không tạo được mã QR (mất mạng?). Dùng nút Sao chép link.</p>'; }
 }
 function familyCard(){
   if(!M.fam) return `<div class="card fam"><h3>👨‍👩‍👧‍👦 Cả nhà cùng theo dõi</h3>
@@ -300,15 +327,21 @@ function familyCard(){
     <div class="code">${fmtCode(M.fam)}</div>
     <p class="muted" style="font-size:13px;margin:8px 0 10px">Gửi link cho người trong nhà. Ai có link đều xem và sửa được — chỉ gửi cho người thân.</p>
     <div class="row" style="flex-wrap:wrap">
-      <button class="btn primary" id="famShare">📤 Gửi link cho cả nhà</button>
+      <input class="in" id="famLinkBox" readonly value="${esc(famLink(M.fam))}" style="width:100%;font-size:13px;margin-bottom:8px" onclick="this.select()">
+      <button class="btn primary" id="famCopy">📋 Sao chép link</button>
+      ${navigator.share?'<button class="btn" id="famShare">📤 Chia sẻ…</button>':''}
+      <button class="btn" id="famQRBtn">🔳 Mã QR</button>
       <button class="btn" id="famSync">🔄 Đồng bộ</button>
       <button class="btn" id="famLeave" style="color:var(--danger)">Rời nhóm</button>
-    </div></div>`;
+    </div><div id="famQR" class="hidden" style="margin-top:12px"></div>
+    <p class="muted" style="font-size:12px;margin:10px 0 0">Cách gửi: bấm <b>Sao chép link</b> → mở Zalo → giữ ô nhập tin → <b>Dán</b> → Gửi.</p></div>`;
 }
 function bindFamily(){
   const c=$('#famCreate'); if(c) c.onclick=createFamily;
   const j=$('#famJoin'); if(j) j.onclick=()=>joinFamily($('#famCode').value);
   const sh=$('#famShare'); if(sh) sh.onclick=shareLink;
+  const cp=$('#famCopy'); if(cp) cp.onclick=copyLink;
+  const qb=$('#famQRBtn'); if(qb) qb.onclick=showQR;
   const sy=$('#famSync'); if(sy) sy.onclick=()=>sync();
   const lv=$('#famLeave'); if(lv) lv.onclick=leaveFamily;
   setSync(M.fam?syncState==='off'?'busy':syncState:'off');
