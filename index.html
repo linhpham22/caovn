@@ -189,7 +189,7 @@ function flattenOld(o){
   Object.entries(o.shop||{}).forEach(([k,v])=>{ if(v) ops.push(['s/'+k,1]); });
   return ops;
 }
-function setK(k,v,quiet){ F[k]=v; M.queue.push(k); persist(); if(!quiet){ build(); scheduleSync(800); } }
+function setK(k,v,quiet){ F[k]=v; M.queue.push(k); persist(); if(!quiet){ build(); scheduleSync(300); } }
 function setMany(ops){ ops.forEach(([k,v])=>{ F[k]=v; M.queue.push(k); }); persist(); build(); scheduleSync(300); }
 
 let R={kids:[],shop:{}}, S=null;
@@ -257,12 +257,14 @@ function refreshAll(remote){
   renderAgeChip(); renderHdr(); renderKids(); render();
 }
 document.addEventListener('focusout',()=>setTimeout(()=>{ if(pendingRender){ pendingRender=false; refreshAll(true); } },50));
-setInterval(()=>{ if(M.fam && document.visibilityState==='visible') sync(); }, 15000);
+setInterval(()=>{ if(M.fam && document.visibilityState==='visible') sync(); }, 5000);
+window.addEventListener('focus',()=>sync());
+function keepHash(){ const want=M.fam?'#gd='+M.fam:''; if(location.hash!==want) history.replaceState(null,'',location.pathname+location.search+want); }
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') sync(); });
 window.addEventListener('online',()=>sync());
 const hasData = () => Object.keys(F).some(k=>!/\/c$/.test(k));
 function createFamily(){
-  M.fam=newCode(); M.since=0; M.queue=Object.keys(F); persist(); sync(); refreshAll();
+  M.fam=newCode(); M.since=0; M.queue=Object.keys(F); persist(); keepHash(); sync(); refreshAll();
   toast('Đã tạo nhóm gia đình — gửi link cho cả nhà nhé');
 }
 async function joinFamily(code){
@@ -272,13 +274,13 @@ async function joinFamily(code){
   let keep=false;
   if(hasData()) keep=confirm('Trên máy này đã có dữ liệu của bé.\n\nOK = GỘP dữ liệu này vào sổ tay gia đình\nHủy = Bỏ dữ liệu trên máy này, chỉ dùng dữ liệu của gia đình');
   if(!keep) F={};
-  M.fam=code; M.since=0; M.queue=keep?Object.keys(F):[]; M.active=null; persist();
+  M.fam=code; M.since=0; M.queue=keep?Object.keys(F):[]; M.active=null; persist(); keepHash();
   build(); await sync(); ensureKid(); refreshAll();
   toast('Đã vào sổ tay gia đình ✓'); return true;
 }
 function leaveFamily(){
   if(!confirm('Ngừng đồng bộ trên máy này? Dữ liệu hiện có vẫn giữ lại trên máy, nhưng sẽ không cập nhật với cả nhà nữa.')) return;
-  M.fam=null; M.since=0; M.queue=[]; persist(); setSync('off'); refreshAll(); toast('Đã rời nhóm trên máy này');
+  M.fam=null; M.since=0; M.queue=[]; persist(); keepHash(); setSync('off'); refreshAll(); toast('Đã rời nhóm trên máy này');
 }
 async function shareLink(){
   const url=famLink(M.fam), text='Sổ tay Thực Đơn Cao Lớn của nhà mình — mở link để cùng theo dõi các con:';
@@ -541,9 +543,12 @@ function render(){ ({today:renderToday,cal:renderCal,track:renderTrack,guide:ren
 function go(v){ view=v; document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden', s.id!=='v-'+v)); document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.v===v)); render(); scrollTo(0,0); }
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>go(b.dataset.v));
 async function checkHash(){
-  const m=location.hash.match(/gd=([A-Za-z0-9-]+)/); if(!m) return;
-  const code=m[1].toUpperCase().replace(/[^A-Z0-9]/g,''); history.replaceState(null,'',location.pathname+location.search);
-  if(code!==M.fam && confirm('Mở sổ tay gia đình được chia sẻ cho bạn?\n\nMã: '+fmtCode(code))) await joinFamily(code);
+  const m=location.hash.match(/gd=([A-Za-z0-9-]+)/);
+  if(m){ const code=m[1].toUpperCase().replace(/[^A-Z0-9]/g,'');
+    if(code!==M.fam){
+      if(confirm('Mở sổ tay gia đình được chia sẻ cho bạn?\n\nMã: '+fmtCode(code))) await joinFamily(code);
+    } }
+  keepHash();
 }
 window.addEventListener('hashchange', checkHash);
 (async()=>{ refreshAll(); await checkHash(); refreshAll(); if(M.fam) sync(); })();
